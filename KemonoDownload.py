@@ -1,10 +1,7 @@
 '''
 Created by Ignacio
 12/03/24
-
 '''
-
-
 
 import os
 import requests
@@ -29,18 +26,18 @@ def obtener_enlace_archivo_txt(url_pagina):
         print("Error al obtener el enlace al archivo TXT:", e)
         return None
 
+session = requests.Session()
+
 def descargar_archivo(url, nombre_archivo):
     try:
-        response = requests.get(url)
-        if response.status_code == 200:
+        with session.get(url, stream=True) as response:
+            response.raise_for_status()
             with open(nombre_archivo, 'wb') as file:
-                file.write(response.content)
+                for chunk in response.iter_content(chunk_size=8192):
+                    file.write(chunk)
             return True
-        else:
-            print("Error al descargar el archivo:", response.status_code)
-            return False
-    except Exception as e:
-        print("Error al descargar el archivo:", e)
+    except requests.HTTPError as e:
+        print(f"Error al descargar el archivo: {e}")
         return False
 
 def extraer_links_m3u8(archivo_txt):
@@ -48,8 +45,8 @@ def extraer_links_m3u8(archivo_txt):
         with open(archivo_txt, 'r') as file:
             contenido = file.read()
             # Encuentra todos los enlaces M3U8 en el contenido del archivo TXT
-            links_m3u8 = re.findall(r'EXT-X-STREAM-INF.*RESOLUTION=1920x1080.*?\n(.*?)\n', contenido)
-            return links_m3u8
+            matches = re.findall(r'EXT-X-STREAM-INF.*RESOLUTION=(\d+x\d+).*?\n(.*?)\n', contenido)
+            return [(resolucion, link) for resolucion, link in matches]
     except Exception as e:
         print("Error al extraer los enlaces M3U8:", e)
         return []
@@ -65,7 +62,7 @@ def guardar_link_en_archivo(links_m3u8, nombre_archivo):
 
 def convertir_m3u8_a_mp4(archivo_m3u8):
     try:
-        comando_vlc = f'vlc --no-repeat {archivo_m3u8} --sout="#transcode{{vcodec=h264,acodec=mpga,ab=128,channels=2,samplerate=44100}}:standard{{access=file,mux=mp4,dst=output.mp4}}"'
+        comando_vlc = f'vlc --no-repeat {archivo_m3u8} --sout="#transcode{{vcodec=h265,acodec=mpga,ab=128,channels=2,samplerate=44100}}:standard{{access=file,mux=mp4,dst=output.mp4}}"'
         subprocess.run(comando_vlc, shell=True, check=True)
         print("Conversión completada.")
     except Exception as e:
@@ -92,22 +89,26 @@ if __name__ == "__main__":
             os.makedirs(carpeta_enlaces, exist_ok=True)
             os.makedirs(carpeta_videos, exist_ok=True)
 
-            # Extraer enlaces M3U8 del archivo TXT
+            # Extraer enlaces M3U8 y sus resoluciones del archivo TXT
             links_m3u8 = extraer_links_m3u8(nombre_archivo_txt)
             if links_m3u8:
-                # Guardar los enlaces M3U8 en un archivo separado
-                nombre_archivo_enlaces = os.path.join(carpeta_enlaces, "enlaces_m3u8.txt")
-                guardar_link_en_archivo(links_m3u8, nombre_archivo_enlaces)
+                print("Resoluciones disponibles:")
+                for i, (resolucion, _) in enumerate(links_m3u8):
+                    print(f"{i + 1}. {resolucion}")
+
+                # Permitir al usuario elegir la resolución
+                seleccion = int(input("Selecciona la resolución que deseas procesar (ingresa el número): ")) - 1
+                resolucion_elegida, link_elegido = links_m3u8[seleccion]
+
+                print(f"Resolución seleccionada: {resolucion_elegida}")
+
+                # Guardar el enlace M3U8 en un archivo separado
+                nombre_archivo_enlaces = os.path.join(carpeta_enlaces, f"enlaces_m3u8_{resolucion_elegida.replace('x', '_')}.txt")
+                guardar_link_en_archivo([link_elegido], nombre_archivo_enlaces)
                 print(f"Enlaces guardados en {nombre_archivo_enlaces}")
 
-                # Convertir cada archivo M3U8 a MP4 y moverlo a la carpeta de videos
-                for i, link_m3u8 in enumerate(links_m3u8):
-                    nombre_video = f"video_{i}.mp4"
-                    archivo_m3u8 = os.path.join(carpeta_enlaces, f"video_{i}.m3u8")
-                    descargar_archivo(link_m3u8, archivo_m3u8)
-                    convertir_m3u8_a_mp4(archivo_m3u8)
-                    os.rename("output.mp4", os.path.join(carpeta_videos, nombre_video))
-                    print(f"Video {nombre_video} convertido y movido a la carpeta de videos.")
+                # Convertir el archivo M3U8 a MP4
+                convertir_m3u8_a_mp4(nombre_archivo_enlaces)
             else:
                 print("No se encontraron enlaces M3U8 en el archivo", nombre_archivo_txt)
         else:
