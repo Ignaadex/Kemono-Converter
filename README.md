@@ -18,8 +18,8 @@ Este script descarga archivos M3U8 desde Kemono, extrae los enlaces M3U8 para vi
 ## Instrucciones de Instalación
 1. Clona este repositorio en tu máquina local.
 2. Instala Python 3 si aún no lo tienes.
-3. Instala FFmpeg desde [su sitio web oficial](https://ffmpeg.org/download.html).
-
+3. Instala VLC Media Player desde [su sitio web oficial](https://www.videolan.org/vlc/).
+   
 ## Notas
 - Asegúrate de tener una conexión a internet estable para descargar los archivos necesarios.
 - Los archivos M3U8 deben contener enlaces con resolución 1920x1080 para ser procesados correctamente.
